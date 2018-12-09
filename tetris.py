@@ -1,129 +1,115 @@
 #!/usr/bin/env python3
 
 import curses
-from curses import KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_RESIZE
-from random import randint
+import board
+import time
 from curses import wrapper
-import signal
+#
+BOARD_WIDTH = 10
+BOARD_HEIGHT = 20
+
+GAME_WINDOW_WIDTH = 2 * BOARD_WIDTH + 2
+GAME_WINDOW_HEIGHT = BOARD_HEIGHT + 2
+
+#
+STATUS_WINDOW_HEIGHT = 7
+STATUS_WINDOW_WIDTH = 40
 
 
-class Tetro(object):
 
-    def __init__(self, height, width, x, y, MAX_X, MAX_Y, window):
-        self.last_item = []
-        self.score = 0
-        self.timeout = 100
-        self.start_x = width // 4
-        self.start_y = 2
-        self.x = x
-        self.y = y
-        self.max_x = MAX_X
-        self.max_y = MAX_Y
-        self.char = '🍳'
-        self.window = window
-        self.direction = KEY_DOWN
-        self.direction_map = {
-            KEY_DOWN: self.move_down,
-            KEY_LEFT: self.move_left,
-            KEY_RIGHT: self.move_right
-        }
+#CHECK
+def draw_game_window(window, game_board):
+    """Draw game window"""
 
-    @property
-    def count_score(self):
-        return 'Score: {}'.format(self.score)
+    window.border()
 
-    def update(self):
-        self.direction_map[self.direction]()
+    # draw board
+    for a in range(BOARD_HEIGHT):
+        for b in range(BOARD_WIDTH):
+            if game_board.board[a][b] == 1:
+                window.addstr(a + 1, 2 * b + 1, "X")
+            else:
+                # draw net
+                window.addstr(a + 1, 2 * b + 1, " ")
 
-    def change_direction(self, direction):
-        self.direction = direction
+    # draw current block
+    for a in range(game_board.current_block.size[0]):
+        for b in range(game_board.current_block.size[1]):
 
-    def render(self):
-        self.window.addstr(self.y, self.x, self.char, curses.color_pair(1))
+            if game_board.current_block.shape[a][b] == 1:
+                x = 2 * game_board.current_block_pos[1] + 2 * b + 1
+                y = game_board.current_block_pos[0] + a + 1
+                window.addstr(y, x, "X")
 
-    '''
-    em di ngu 1 ti nha
-    anh choi game nghe nhac gi di dung lam nua k em theo k kip mat hehe
-    '''
+    if game_board.is_game_over():
+        window.addstr(BOARD_HEIGHT//2, BOARD_WIDTH//2+1, "GAME OVER", curses.A_BOLD)
+        window.addstr(BOARD_HEIGHT//2+2, 2, "IS THIS YOUR LIMIT?", curses.A_BOLD)
+        window.refresh()
 
-    def move_down(self):
-        if self.y < self.max_y:
-            self.y += 1
+#CHECK
+def draw_status_window(window, game_board):
+    """Draw status window"""
+
+    window.addstr(3, 1, "      🎅   SANTA GIVES YOU {} 🎄    ".format(game_board.score), curses.A_BOLD)
+
+    window.refresh()
+    # pass
+
+
+def main(scr):
+    game_board = board.Board(BOARD_HEIGHT, BOARD_WIDTH)
+    game_board.start()
+
+    old_score = game_board.score
+
+    curses.curs_set(0)
+
+
+    game_window = curses.newwin(GAME_WINDOW_HEIGHT, GAME_WINDOW_WIDTH)
+    game_window.timeout(100)
+
+    game_window.keypad(1)
+
+    '''NOTE'''
+    status_window = curses.newwin(STATUS_WINDOW_HEIGHT, STATUS_WINDOW_WIDTH, BOARD_HEIGHT//2-2, BOARD_WIDTH+14)
+
+    draw_game_window(game_window, game_board)
+    draw_status_window(status_window, game_board)
+
+
+    quit_game = False
+    while not quit_game:
+        key_event = game_window.getch()
+
+
+        if key_event == curses.KEY_RESIZE:
+            draw_game_window(game_window, game_board)
+
+        if key_event == ord("q"):
+            quit_game = True
+
+        if not game_board.is_game_over():
+            # if time.time() - start >= 1:
+            game_board.move_block("down")
+                # start = time.time()
+
+            if key_event == curses.KEY_DOWN:
+                game_board.move_block("down")
+            elif key_event == curses.KEY_LEFT:
+                game_board.move_block("left")
+            elif key_event == curses.KEY_RIGHT:
+                game_board.move_block("right")
         else:
-            self.last_item.append((self.x, self.y))
-            # self.x = self.start_x
-            # self.y = self.start_y
+            game_window.timeout(-1)
+            if key_event == ord("\n"):
+                game_board.start()
+                game_window.nodelay(True)
 
-    def move_left(self):
-        self.x -= 1
-        if self.x < 1:
-            self.x = 1
+        draw_game_window(game_window, game_board)
+        if not old_score is game_board.score:
+            draw_status_window(status_window, game_board)
+            old_score = game_board.score
+    curses.endwin()
 
-    def move_right(self):
-        self.x += 1
-        if self.x > self.max_x:
-            self.x = self.max_x
-
-class TetrisWindow:
-    def __init__(self):
-        self.stdscr = curses.initscr()
-        # Initialize values
-        self.HEIGHT, self.WIDTH = self.stdscr.getmaxyx()
-        self.MAX_X = self.WIDTH // 2 - 1
-        self.MAX_Y = self.HEIGHT - 2
-        self.START_X = self.WIDTH // 4
-        self.START_Y = 2
-
-    def draw_UI(self, stdscr):
-
-        key = 0
-
-        # Clear and refresh the screen for a blank canvas
-        stdscr.clear()
-        stdscr.refresh()
-
-        # set color for later use
-        curses.start_color()
-        curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
-
-        # block the window from reading in millisecond
-        stdscr.timeout(100)
-
-        #Hide the cursor
-        curses.curs_set(0)
-
-        
-        while key != ord('q'):
-            stdscr.clear()
-            tetro = Tetro(self.HEIGHT, self.WIDTH, self.START_X, self.START_Y,
-                          self.MAX_X, self.MAX_Y, stdscr)
-
-            tetro.render()
-            stdscr.border(0)
-            #draw the split and score
-            for i in range(1, self.HEIGHT - 1):
-                stdscr.addstr(i, self.WIDTH // 2, "||", curses.color_pair(1))
-
-            stdscr.addstr(self.HEIGHT // 2, self.WIDTH // 2 + self.WIDTH // 4, tetro.count_score, curses.color_pair(0))
-
-            # append key and make move
-            if key in [KEY_DOWN, KEY_LEFT, KEY_RIGHT]:
-                tetro.change_direction(key)
-            tetro.update()
-            # tetro.direction = KEY_DOWN
-            self.START_X = tetro.x
-            self.START_Y = tetro.y
-            #draw the TETRO in its current position
-            # tetro.render()
-            
-            stdscr.refresh()
-            key = stdscr.getch()
-
-    def initializeWin(self):
-        signal.signal(signal.SIGWINCH, signal.SIG_IGN)
-        wrapper(self.draw_UI)
-
-
-if __name__ == '__main__':
-    wd = TetrisWindow()
-    wd.initializeWin()
+if __name__ == "__main__":
+    wrapper(main)
