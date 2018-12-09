@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import curses
 from curses import KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_RESIZE
 from random import randint
@@ -6,18 +7,14 @@ from curses import wrapper
 import signal
 
 
-# WIDTH = 35
-# HEIGHT = 20
-
-
 class Tetro(object):
-    REV_DIR_MAP = {
-    KEY_UP: KEY_DOWN
-    }
 
-    def __init__(self, x, y, MAX_X, MAX_Y, window):
+    def __init__(self, height, width, x, y, MAX_X, MAX_Y, window):
+        self.last_item = []
         self.score = 0
         self.timeout = 100
+        self.start_x = width // 4
+        self.start_y = 2
         self.x = x
         self.y = y
         self.max_x = MAX_X
@@ -44,112 +41,89 @@ class Tetro(object):
     def render(self):
         self.window.addstr(self.y, self.x, self.char, curses.color_pair(1))
 
-
     '''
     em di ngu 1 ti nha
     anh choi game nghe nhac gi di dung lam nua k em theo k kip mat hehe
-
     '''
 
     def move_down(self):
-        self.y += 1
-        if self.y > self.max_y:
-            self.y = self.max_y
-
+        if self.y < self.max_y:
+            self.y += 1
+        else:
+            self.last_item.append((self.x, self.y))
+            # self.x = self.start_x
+            # self.y = self.start_y
 
     def move_left(self):
         self.x -= 1
         if self.x < 1:
-            self.x = self.max_x
+            self.x = 1
 
     def move_right(self):
         self.x += 1
         if self.x > self.max_x:
-            self.x = 1
+            self.x = self.max_x
 
 class TetrisWindow:
     def __init__(self):
-        self.initializeWin()
-
-    def handle_size(self):
-        height, width = self.stdscr.getmaxyx()
-        if height < 20 or width < 20:
-            self.stdscr.clear()
-            self.stdscr.addstr(height//2, width//2, 'TOO SMALL', curses.color_pair(1))
-            self.stdscr.refresh()
+        self.stdscr = curses.initscr()
+        # Initialize values
+        self.HEIGHT, self.WIDTH = self.stdscr.getmaxyx()
+        self.MAX_X = self.WIDTH // 2 - 1
+        self.MAX_Y = self.HEIGHT - 2
+        self.START_X = self.WIDTH // 4
+        self.START_Y = 2
 
     def draw_UI(self, stdscr):
-        # signal.signal(signal.SIGWINCH, signal.SIG_IGN)
 
         key = 0
-        self.stdscr = stdscr
 
         # Clear and refresh the screen for a blank canvas
         stdscr.clear()
         stdscr.refresh()
 
-        self.HEIGHT, self.WIDTH = stdscr.getmaxyx()
-        MAX_X = self.WIDTH // 2 - 1
-        MAX_Y = self.HEIGHT - 2
-        TETRO_X = self.WIDTH // 4
-        TETRO_Y = 1
-
+        # set color for later use
         curses.start_color()
         curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
+
+        # block the window from reading in millisecond
         stdscr.timeout(100)
-        # turn off echoing to screen when pressing a button
-        curses.noecho()
-        # react instantly to key without enter
-        curses.cbreak()
-        # enable keypad mode to handle keys ourselves
-        stdscr.keypad(True)
+
+        #Hide the cursor
         curses.curs_set(0)
 
-        tetro = Tetro(TETRO_X, TETRO_Y, MAX_X, MAX_Y, stdscr)
-        self.cont = 1
-        while self.cont:
-            while 1:
-                if key == KEY_RESIZE:
-                    self.handle_size()
-                else:
-
-                    if key is ord('q'):
-                        break
-                    stdscr.clear()
-                    stdscr.border(0)
-                    #draw the border and score
-                    for i in range(1, self.HEIGHT - 1):
-                        stdscr.addstr(i, self.WIDTH // 2, "||", curses.color_pair(1))
-
-                    stdscr.addstr(self.HEIGHT // 2, self.WIDTH // 2 + self.WIDTH // 4, tetro.count_score, curses.color_pair(0))
-
-                    # append key and make move
-                    if key in [KEY_DOWN, KEY_LEFT, KEY_RIGHT]:
-                        tetro.change_direction(key)
-                    tetro.update()
-
-                    #draw the TETRO in its current position
-                    tetro.render()
-                    stdscr.refresh()
-                    key = stdscr.getch()
-
+        
+        while key != ord('q'):
             stdscr.clear()
+            tetro = Tetro(self.HEIGHT, self.WIDTH, self.START_X, self.START_Y,
+                          self.MAX_X, self.MAX_Y, stdscr)
+
+            tetro.render()
+            stdscr.border(0)
+            #draw the split and score
+            for i in range(1, self.HEIGHT - 1):
+                stdscr.addstr(i, self.WIDTH // 2, "||", curses.color_pair(1))
+
+            stdscr.addstr(self.HEIGHT // 2, self.WIDTH // 2 + self.WIDTH // 4, tetro.count_score, curses.color_pair(0))
+
+            # append key and make move
+            if key in [KEY_DOWN, KEY_LEFT, KEY_RIGHT]:
+                tetro.change_direction(key)
+            tetro.update()
+            # tetro.direction = KEY_DOWN
+            self.START_X = tetro.x
+            self.START_Y = tetro.y
+            #draw the TETRO in its current position
+            # tetro.render()
+            
             stdscr.refresh()
-            stdscr.addstr(self.HEIGHT//2 + 1, self.WIDTH // 2, "   GAME OVER", curses.color_pair(1))
-            stdscr.addstr(self.HEIGHT//2 + 2, self.WIDTH // 2, "Press Q to exit", curses.color_pair(1))
-            stdscr.addstr(self.HEIGHT//2 + 3, self.WIDTH // 2, "Press P to play again", curses.color_pair(1))
-            while 1:
-                key = stdscr.getch()
-                if key != ord('q'):
-                    self.cont = 0
-                    break
-                elif key == ord('p'):
-                    break
-            stdscr.refresh()
+            key = stdscr.getch()
 
     def initializeWin(self):
+        signal.signal(signal.SIGWINCH, signal.SIG_IGN)
         wrapper(self.draw_UI)
 
 
 if __name__ == '__main__':
-    TetrisWindow()
+    wd = TetrisWindow()
+    wd.initializeWin()
